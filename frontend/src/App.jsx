@@ -48,6 +48,11 @@ export default function App() {
           <p className="sub">
             Seven cities · data from Open-Meteo · stored in Firebase Firestore
             {cities[0] && <> · {cities[0].date}</>}
+            {cities[0]?.collected_at && (
+              <> · updated {new Date(cities[0].collected_at).toLocaleString([], {
+                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+              })}</>
+            )}
           </p>
         </div>
         <button className="refresh" onClick={onRefresh} disabled={refreshing}>

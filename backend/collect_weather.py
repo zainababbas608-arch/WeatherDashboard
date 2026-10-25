@@ -9,9 +9,11 @@ Firestore layout:
   cities/{city}            -> latest reading (overwritten on each run)
   readings/{city}_{date}   -> one document per city per day (history)
 
-Run:  python collect_weather.py
+Run:  python collect_weather.py          (today only, used by scheduler.py)
+      python collect_weather.py 30       (also backfill the last 30 days)
 """
 import os
+import sys
 from datetime import datetime, timezone
 
 import requests
@@ -32,6 +34,7 @@ CITIES = {
 }
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
+MAX_PAST_DAYS = 92  # Open-Meteo limit for past_days
 
 # WMO weather interpretation codes -> readable text
 WMO_CODES = {
@@ -59,7 +62,8 @@ def sunshine_status(sunshine_s, daylight_s):
     return label, pct
 
 
-def fetch_city(name, lat, lon):
+def fetch_city(name, lat, lon, past_days=0):
+    """Return one record per day: `past_days` back, plus today."""
     params = {
         "latitude": lat,
         "longitude": lon,
@@ -67,30 +71,40 @@ def fetch_city(name, lat, lon):
         "daily": "temperature_2m_max,temperature_2m_min,sunshine_duration,daylight_duration",
         "timezone": "Asia/Karachi",
         "forecast_days": 1,
+        "past_days": past_days,
     }
     resp = requests.get(API_URL, params=params, timeout=20)
     resp.raise_for_status()
     data = resp.json()
 
     cur, daily = data["current"], data["daily"]
-    label, pct = sunshine_status(daily["sunshine_duration"][0], daily["daylight_duration"][0])
+    today = daily["time"][-1]
+    collected_at = datetime.now(timezone.utc).isoformat()
 
-    return {
-        "city": name,
-        "latitude": lat,
-        "longitude": lon,
-        "date": daily["time"][0],
-        "temp_min_c": daily["temperature_2m_min"][0],
-        "temp_max_c": daily["temperature_2m_max"][0],
-        "temp_current_c": cur["temperature_2m"],
-        "condition": WMO_CODES.get(cur["weather_code"], f"Code {cur['weather_code']}"),
-        "is_day": bool(cur["is_day"]),
-        "sunshine_hours": round((daily["sunshine_duration"][0] or 0) / 3600, 2),
-        "daylight_hours": round((daily["daylight_duration"][0] or 0) / 3600, 2),
-        "sunshine_pct": pct,
-        "sunshine_status": label,
-        "collected_at": datetime.now(timezone.utc).isoformat(),
-    }
+    records = []
+    for i, day in enumerate(daily["time"]):
+        label, pct = sunshine_status(daily["sunshine_duration"][i], daily["daylight_duration"][i])
+        record = {
+            "city": name,
+            "latitude": lat,
+            "longitude": lon,
+            "date": day,
+            "temp_min_c": daily["temperature_2m_min"][i],
+            "temp_max_c": daily["temperature_2m_max"][i],
+            "sunshine_hours": round((daily["sunshine_duration"][i] or 0) / 3600, 2),
+            "daylight_hours": round((daily["daylight_duration"][i] or 0) / 3600, 2),
+            "sunshine_pct": pct,
+            "sunshine_status": label,
+            "collected_at": collected_at,
+        }
+        if day == today:
+            record.update({
+                "temp_current_c": cur["temperature_2m"],
+                "condition": WMO_CODES.get(cur["weather_code"], f"Code {cur['weather_code']}"),
+                "is_day": bool(cur["is_day"]),
+            })
+        records.append(record)
+    return records
 
 
 def init_firestore():
@@ -109,19 +123,27 @@ def init_firestore():
     return firestore.client()
 
 
-def main():
+def main(backfill_days=0):
     db = init_firestore()
     for name, (lat, lon) in CITIES.items():
         try:
-            record = fetch_city(name, lat, lon)
+            records = fetch_city(name, lat, lon, past_days=backfill_days)
         except Exception as exc:
             print(f"[skip] {name}: {exc}")
             continue
-        db.collection("cities").document(name).set(record)
-        db.collection("readings").document(f"{name}_{record['date']}").set(record)
-        print(f"[ok]   {name}: {record['temp_min_c']}-{record['temp_max_c']}°C, "
-              f"{record['condition']}, {record['sunshine_status']}")
+        latest = max(records, key=lambda r: r["date"])
+        db.collection("cities").document(name).set(latest)
+        for record in records:
+            db.collection("readings").document(f"{name}_{record['date']}").set(record)
+        print(f"[ok]   {name}: {latest['temp_min_c']}-{latest['temp_max_c']}°C, "
+              f"{latest['condition']}, {latest['sunshine_status']}")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        days = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+    except ValueError:
+        raise SystemExit(f"Usage: python collect_weather.py [days 0-{MAX_PAST_DAYS}]")
+    if not 0 <= days <= MAX_PAST_DAYS:
+        raise SystemExit(f"days must be between 0 and {MAX_PAST_DAYS}")
+    main(days)

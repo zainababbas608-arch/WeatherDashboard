@@ -14,6 +14,9 @@ Endpoints:
   GET  /api/history?days=7&city=Lahore  daily readings (city optional)
   POST /api/refresh                   re-run the collector, then return latest data
 """
+import io
+import os
+import time
 from datetime import date, timedelta
 
 from flask import Flask, jsonify, request, send_file
@@ -26,6 +29,9 @@ app = Flask(__name__)
 CORS(app)  # allow the React dev server (localhost:3000 / 5173) to call this API
 
 db = collect_weather.init_firestore()
+
+CHART_CACHE_SECONDS = int(os.getenv("CHART_CACHE_SECONDS", "300"))
+_chart_cache = {}  # (chart name, days) -> (rendered_at, png bytes)
 
 
 def latest_cities():
@@ -86,25 +92,36 @@ def list_charts():
 @app.get("/api/charts/<name>")
 def get_chart(name):
     """Returns a Seaborn chart as a PNG image. Use directly in <img src=...>."""
+    days = None
     if name == "trend":
         try:
             days = max(1, min(int(request.args.get("days", 7)), 90))
         except ValueError:
             days = 7
-        buf = charts.trend_chart(history_rows(days))
-    elif name in ("temperatures", "sunshine", "conditions"):
-        func = {"temperatures": charts.temperature_chart,
-                "sunshine": charts.sunshine_chart,
-                "conditions": charts.conditions_chart}[name]
-        buf = func(latest_cities())
-    else:
+    elif name not in ("temperatures", "sunshine", "conditions"):
         return jsonify({"error": f"Unknown chart '{name}'"}), 404
-    return send_file(buf, mimetype="image/png", max_age=0)
+
+    cached = _chart_cache.get((name, days))
+    if cached and time.time() - cached[0] < CHART_CACHE_SECONDS:
+        png = cached[1]
+    else:
+        if name == "trend":
+            buf = charts.trend_chart(history_rows(days))
+        else:
+            func = {"temperatures": charts.temperature_chart,
+                    "sunshine": charts.sunshine_chart,
+                    "conditions": charts.conditions_chart}[name]
+            buf = func(latest_cities())
+        png = buf.getvalue()
+        _chart_cache[(name, days)] = (time.time(), png)
+
+    return send_file(io.BytesIO(png), mimetype="image/png", max_age=0)
 
 
 @app.post("/api/refresh")
 def refresh():
     collect_weather.main()
+    _chart_cache.clear()  # new data -> discard rendered charts
     return jsonify(latest_cities())
 
 

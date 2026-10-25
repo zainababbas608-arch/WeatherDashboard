@@ -9,12 +9,22 @@ services:
     volumes:
       - ./backend/serviceAccountKey.json:/secrets/serviceAccountKey.json:ro
 
+  # Keeps Firestore fresh automatically (see backend/scheduler.py).
+  collector:
+    build: ./backend
+    container_name: weather-collector
+    command: ["python", "scheduler.py"]
+    environment:
+      FIREBASE_KEY_PATH: /secrets/serviceAccountKey.json
+      COLLECT_INTERVAL_SECONDS: ${COLLECT_INTERVAL_SECONDS:-3600}
+    volumes:
+      - ./backend/serviceAccountKey.json:/secrets/serviceAccountKey.json:ro
+    restart: unless-stopped
+
   frontend:
     build: ./frontend
     container_name: weather-frontend
     ports:
-      - "5173:5173"
-    environment:
-      VITE_API_TARGET: http://backend:5000
+      - "5173:80"
     depends_on:
       - backend
