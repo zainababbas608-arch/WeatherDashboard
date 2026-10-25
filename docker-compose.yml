@@ -1,0 +1,20 @@
+services:
+  backend:
+    build: ./backend
+    container_name: weather-backend
+    ports:
+      - "5000:5000"
+    environment:
+      FIREBASE_KEY_PATH: /secrets/serviceAccountKey.json
+    volumes:
+      - ./backend/serviceAccountKey.json:/secrets/serviceAccountKey.json:ro
+
+  frontend:
+    build: ./frontend
+    container_name: weather-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_TARGET: http://backend:5000
+    depends_on:
+      - backend
