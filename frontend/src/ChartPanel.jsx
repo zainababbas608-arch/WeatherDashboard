@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API } from "./api";
 
 const TABS = [
   { id: "temperatures", label: "Min vs Max" },
@@ -14,7 +15,7 @@ export default function ChartPanel({ version }) {
 
   // `version` changes after each refresh so the browser re-fetches the image
   const src =
-    `/api/charts/${tab}?v=${version}` + (tab === "trend" ? `&days=${days}` : "");
+    `${API}/api/charts/${tab}?v=${version}` + (tab === "trend" ? `&days=${days}` : "");
 
   const pick = (id) => { setFailed(false); setTab(id); };
 

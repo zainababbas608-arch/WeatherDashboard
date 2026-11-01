@@ -14,7 +14,8 @@ Endpoints:
   GET  /api/history?days=7&city=Lahore  daily readings (city optional)
   POST /api/refresh                   re-run the collector, then return latest data
 """
-from datetime import date, timedelta
+import threading
+from datetime import date, datetime, timedelta, timezone
 
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
@@ -40,9 +41,25 @@ def health():
     return jsonify({"status": "ok"})
 
 
+_refresh_lock = threading.Lock()
+
+
+def pk_today():
+    # Pakistan time (UTC+5); hosting servers run in UTC
+    return datetime.now(timezone(timedelta(hours=5))).date().isoformat()
+
+
 @app.get("/api/cities")
 def get_cities():
-    return jsonify(latest_cities())
+    rows = latest_cities()
+    # Keep data fresh without a separate scheduler: refresh once per day on first visit
+    if not rows or rows[0]["date"] != pk_today():
+        with _refresh_lock:
+            rows = latest_cities()
+            if not rows or rows[0]["date"] != pk_today():
+                collect_weather.main()
+                rows = latest_cities()
+    return jsonify(rows)
 
 
 @app.get("/api/cities/<name>")
