@@ -1,4 +1,4 @@
-name: My First Deployment
+name: WeatherDashboard 
 on:
 push:
 branches:
