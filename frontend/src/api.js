@@ -6,3 +6,9 @@ const handle = async (res) => {
 
 export const getCities = () => fetch("/api/cities").then(handle);
 export const refreshCities = () => fetch("/api/refresh", { method: "POST" }).then(handle);
+export const sendChat = (message, history = []) =>
+  fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, history }),
+  }).then(handle);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getCities, refreshCities } from "./api";
 import CityCard from "./CityCard.jsx";
 import ChartPanel from "./ChartPanel.jsx";
+import ChatBot from "./ChatBot.jsx";
 
 export default function App() {
   const [cities, setCities] = useState([]);
@@ -48,11 +49,6 @@ export default function App() {
           <p className="sub">
             Seven cities · data from Open-Meteo · stored in Firebase Firestore
             {cities[0] && <> · {cities[0].date}</>}
-            {cities[0]?.collected_at && (
-              <> · updated {new Date(cities[0].collected_at).toLocaleString([], {
-                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-              })}</>
-            )}
           </p>
         </div>
         <button className="refresh" onClick={onRefresh} disabled={refreshing}>
@@ -82,6 +78,8 @@ export default function App() {
       </section>
 
       {cities.length > 0 && <ChartPanel version={version} />}
+
+      <ChatBot />
     </main>
   );
 }

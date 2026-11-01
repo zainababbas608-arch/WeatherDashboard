@@ -1,30 +1,14 @@
 services:
-  backend:
-    build: ./backend
-    container_name: weather-backend
+  weather-app:
+    build: .
+    image: weather-app-image
+    container_name: weather-app
     ports:
       - "5000:5000"
+      - "5173:5173"
     environment:
       FIREBASE_KEY_PATH: /secrets/serviceAccountKey.json
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-meta-llama/llama-3.3-70b-instruct:free}
     volumes:
       - ./backend/serviceAccountKey.json:/secrets/serviceAccountKey.json:ro
-
-  # Keeps Firestore fresh automatically (see backend/scheduler.py).
-  collector:
-    build: ./backend
-    container_name: weather-collector
-    command: ["python", "scheduler.py"]
-    environment:
-      FIREBASE_KEY_PATH: /secrets/serviceAccountKey.json
-      COLLECT_INTERVAL_SECONDS: ${COLLECT_INTERVAL_SECONDS:-3600}
-    volumes:
-      - ./backend/serviceAccountKey.json:/secrets/serviceAccountKey.json:ro
-    restart: unless-stopped
-
-  frontend:
-    build: ./frontend
-    container_name: weather-frontend
-    ports:
-      - "5173:80"
-    depends_on:
-      - backend
