@@ -7,9 +7,12 @@ Course project in three parts:
 3. **Dashboard** — React frontend showing city cards, highlights and chart tabs.
 
 ```
-backend/    Flask API, weather collector, scheduler, chart rendering
-frontend/   React + Vite dashboard (built and served by nginx in Docker)
-docker-compose.yml
+backend/             Flask API, chatbot, weather collector, scheduler, charts
+frontend/            React + Vite dashboard
+docs/                Lab and Docker guides (Word files)
+.github/workflows/   CI checks and GitHub Pages deploy
+Dockerfile           One image with the API and the dashboard
+docker-compose.yml   Runs that image with your Firebase key
 ```
 
 ## Prerequisites
@@ -32,7 +35,12 @@ docker compose up --build
 - Dashboard: http://localhost:5173
 - API: http://localhost:5000/api/health
 
-Three services start: `backend` (API), `collector` (writes weather to Firestore on start and every hour), and `frontend` (nginx serving the built site and forwarding `/api` to Flask).
+One container (`weather-app`) runs the Flask API on port 5000 and the dashboard on port 5173. The data refreshes automatically the first time the dashboard is opened each day, or with the **Refresh data** button. For the chatbot's AI mode, put `OPENROUTER_API_KEY` in a `.env` file in the project root (see `backend/env.example`).
+
+## Live site
+
+- Dashboard: GitHub Pages, deployed by `.github/workflows/deploy.yml` on every push to `main`.
+- API: hosted on Render from `backend/Dockerfile`. The dashboard finds it through `VITE_API_BASE` in `frontend/.env.production`.
 
 ## Run locally
 

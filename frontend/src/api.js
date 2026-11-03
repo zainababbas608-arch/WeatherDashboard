@@ -1,5 +1,5 @@
 // In dev/Docker, /api is proxied to Flask. On GitHub Pages, VITE_API_BASE points to the hosted backend.
-export const API = import.meta.env.VITE_API_BASE || "";
+export const API = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
 
 const handle = async (res) => {
   if (!res.ok) throw new Error(`Server error (${res.status})`);
